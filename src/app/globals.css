@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Accent — overridden per-user via inline style on the app shell */
+  --accent: #2f3192;
+
+  /* Font size scale — overridden per-user via inline style on the app shell */
+  --font-scale: 1;
+
+  /* Dark theme (default) surface palette */
+  --base-950: #0A0B14;
+  --base-900: #111327;
+  --base-800: #181B33;
+  --base-700: #242749;
+  --base-600: #33375f;
+  --base-500: #5a5d7a;
+  --base-400: #5a5d7a;
+  --base-300: #9CA3AF;
+  --base-200: #D1D5DB;
+  --base-100: #F3F4F6;
+}
+
+/* Light theme — applied via data-theme="light" on the app shell wrapper */
+[data-theme="light"] {
+  --base-950: #F3F4F8;
+  --base-900: #FFFFFF;
+  --base-800: #F1F2F7;
+  --base-700: #E3E5EF;
+  --base-600: #C7CBDC;
+  --base-500: #6B6F8C;
+  --base-400: #6B6F8C;
+  --base-300: #4B4F6B;
+  --base-200: #2B2E45;
+  --base-100: #14162B;
+}
+
+html {
+  font-size: calc(16px * var(--font-scale, 1));
+}
+
+* {
+  border-color: theme("colors.base.700");
+}
+
+html,
+body {
+  background-color: theme("colors.base.950");
+  color: theme("colors.base.100");
+}
+
+body {
+  font-family: var(--font-sans-user, var(--font-sans));
+}
+
+::selection {
+  background-color: theme("colors.signal.DEFAULT");
+  color: #ffffff;
+}
+
+.card {
+  background-color: theme("colors.base.900");
+  border: 1px solid theme("colors.base.700");
+  border-radius: 3px;
+}
+
+.btn-primary {
+  background-color: theme("colors.signal.DEFAULT");
+  color: #ffffff;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 3px;
+  transition: background-color 0.15s ease;
+}
+.btn-primary:hover {
+  background-color: theme("colors.signal.soft");
+}
+
+.btn-secondary {
+  background-color: transparent;
+  border: 1px solid theme("colors.base.600");
+  color: theme("colors.base.100");
+  padding: 0.5rem 1rem;
+  border-radius: 3px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.btn-secondary:hover {
+  border-color: theme("colors.signal.DEFAULT");
+  color: theme("colors.signal.soft");
+}
+
+.input {
+  background-color: theme("colors.base.800");
+  border: 1px solid theme("colors.base.600");
+  border-radius: 3px;
+  padding: 0.5rem 0.75rem;
+  color: theme("colors.base.100");
+  width: 100%;
+}
+.input:focus {
+  outline: none;
+  border-color: theme("colors.signal.DEFAULT");
+}
+
+.label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: theme("colors.base.400");
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  border: 1px solid theme("colors.base.600");
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: theme("colors.base.600") transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background-color: theme("colors.base.600");
+  border-radius: 3px;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background-color: theme("colors.base.500");
+}
+
+:focus-visible {
+  outline: 2px solid theme("colors.signal.DEFAULT");
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,494 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  MEMBER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+}
+
+enum InvoiceType {
+  PROFORMA
+  TAX
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LEAVE
+  HALF_DAY
+}
+
+enum NotificationType {
+  MESSAGE
+  TASK_ASSIGNED
+  TASK_STATUS_CHANGED
+  TASK_COMMENT
+  LEAVE_REQUEST
+  PAYSLIP
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String       @id @default(cuid())
+  name          String
+  email         String       @unique
+  password      String
+  role          Role         @default(MEMBER)
+  title         String?
+  avatarColor   String       @default("#E8A33D")
+  avatarImageUrl String?
+  notificationSound String   @default("chime")
+  soundEnabled      Boolean  @default(true)
+  soundVolume       Float    @default(0.6)
+  desktopNotifications Boolean @default(true)
+  autoLogoutMinutes Int      @default(0)
+  createdAt     DateTime     @default(now())
+
+  // Appearance
+  themeMode     String       @default("dark") // "dark" | "light"
+  accentColor   String       @default("#2f3192")
+  fontFamily    String       @default("inter")
+  fontWeight    String       @default("regular") // light | regular | medium | semibold
+  fontSizeScale Float        @default(1.0)
+
+  // Notification preferences (granular)
+  dmNotifPref       String   @default("all") // all | mentions | none
+  groupNotifPref    String   @default("all")
+  threadReplyPref   String   @default("all")
+  taskUpdateAlerts  Boolean  @default(true)
+  pushNotifications Boolean  @default(true)
+  emailNotifications Boolean @default(true)
+
+  // Team sidebar
+  pinnedTeamMemberIds String @default("") // comma-separated user ids, empty = show everyone
+
+  // Employee details
+  employeeCode  String?
+  department    String?
+  phone         String?
+  joiningDate   DateTime?
+  leaveBalanceDays Float     @default(20)
+  performanceScore Int       @default(0)
+
+
+  tasksAssigned Task[]       @relation("AssignedTasks")
+  timeEntries   TimeEntry[]
+  attendance    Attendance[]
+  filesUploaded FileAsset[]
+  conversations ConversationParticipant[]
+  messages      DirectMessage[]
+  taskComments  TaskComment[]
+  notifications Notification[]
+  payslips      Payslip[]
+  leaveRequests LeaveRequest[]      @relation("LeaveRequester")
+  leaveReviews  LeaveRequest[]      @relation("LeaveReviewer")
+  messageReactions MessageReaction[]
+  taskCommentReactions TaskCommentReaction[]
+  notes Note[]
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  content   String   @default("")
+  color     String   @default("#4ADE80")
+  pinned    Boolean  @default(false)
+  shared    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payslip {
+  id          String   @id @default(cuid())
+  periodLabel String
+  periodStart DateTime
+  periodEnd   DateTime
+  basicPay    Float
+  allowances  Float    @default(0)
+  deductions  Float    @default(0)
+  tax         Float    @default(0)
+  netPay      Float
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LeaveRequest {
+  id           String      @id @default(cuid())
+  startDate    DateTime
+  endDate      DateTime
+  reason       String?
+  status       LeaveStatus @default(PENDING)
+  createdAt    DateTime    @default(now())
+
+  userId       String
+  user         User        @relation("LeaveRequester", fields: [userId], references: [id], onDelete: Cascade)
+
+  reviewedById String?
+  reviewedBy   User?       @relation("LeaveReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  body      String?
+  link      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Client {
+  id        String    @id @default(cuid())
+  name      String
+  company   String?
+  email     String?
+  phone     String?
+  notes     String?
+  gstNumber       String?
+  billingAddress  String?
+  lastBudgetAlertAt DateTime?
+  createdAt DateTime  @default(now())
+
+  projects  Project[]
+  invoices  Invoice[]
+  googleAdsConnection ClientGoogleAdsConnection?
+  metaConnection      ClientMetaConnection?
+  adAccounts          ClientAdAccount[]
+}
+
+enum AdPlatform {
+  GOOGLE_ADS
+  META
+}
+
+model ClientAdAccount {
+  id        String     @id @default(cuid())
+  clientId  String
+  client    Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  platform  AdPlatform
+  label     String     // e.g. "Gami Avant"
+  accountId String     // Google Customer ID or Meta Ad Account ID
+  createdAt DateTime   @default(now())
+}
+
+model IntegrationToken {
+  id           String    @id // provider key, e.g. "google_ads", "meta", "ga4"
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  extra        String?   // provider-specific JSON (e.g. MCC login customer id)
+  updatedAt    DateTime  @updatedAt
+}
+
+model ClientMetaConnection {
+  id          String    @id @default(cuid())
+  clientId    String    @unique
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  accessToken String?
+  expiresAt   DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+model ClientGoogleAdsConnection {
+  id           String    @id @default(cuid())
+  clientId     String    @unique
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  loginCustomerId String?
+  updatedAt    DateTime  @updatedAt
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  budget      Float?
+  startDate   DateTime?
+  dueDate     DateTime?
+  createdAt   DateTime      @default(now())
+
+  clientId    String?
+  client      Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  tasks       Task[]
+  timeEntries TimeEntry[]
+  invoices    Invoice[]
+  files       FileAsset[]
+}
+
+model Task {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus  @default(TODO)
+  priority    Priority    @default(MEDIUM)
+  dueDate     DateTime?
+  figmaLink   String?
+  referenceUrl String?
+  isHourly    Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  assigneeId  String?
+  assignee    User?       @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  timeEntries TimeEntry[]
+  comments    TaskComment[]
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fileId    String?
+  file      FileAsset? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  reactions TaskCommentReaction[]
+}
+
+model TaskCommentReaction {
+  id        String      @id @default(cuid())
+  emoji     String
+  createdAt DateTime    @default(now())
+
+  commentId String
+  comment   TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji])
+}
+
+model TimeEntry {
+  id        String   @id @default(cuid())
+  minutes   Int
+  note      String?
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+}
+
+model Invoice {
+  id        String        @id @default(cuid())
+  number    String        @unique
+  type      InvoiceType   @default(PROFORMA)
+  status    InvoiceStatus @default(DRAFT)
+  issueDate DateTime      @default(now())
+  dueDate   DateTime?
+  notes     String?
+  managementFeePercent Float @default(0)
+  retainerAmount       Float @default(0)
+  taxPercent           Float @default(18)
+  createdAt DateTime      @default(now())
+
+  clientId  String
+  client    Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  items     InvoiceItem[]
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  description String
+  hsnSac      String?
+  quantity    Float   @default(1)
+  rate        Float   @default(0)
+
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model CompanyProfile {
+  id                String   @id @default("singleton")
+  name              String   @default("Enigma Digital")
+  legalName         String   @default("Secret Admirer Marketing LLP")
+  addressLines      String   @default("WeWork Nesco IT Park, 10th Floor, Building No.: 4, Office No. VO-925\nWestern Express Highway, Nesco IT, Goregaon East, Mumbai - 400063")
+  gstin             String   @default("27AEVFS6695E1Z4")
+  pan               String   @default("AEVFS6695E")
+  bankAccountName   String   @default("Secret Admirer Marketing LLP")
+  bankAccountType   String   @default("Current")
+  bankBranch        String   @default("Malad Branch")
+  bankName          String   @default("IDFC First Bank")
+  bankAccountNumber String   @default("10245172353")
+  bankIfsc          String   @default("IDFB0040114")
+
+  // Invoice numbering — the *next* number to assign for each invoice type,
+  // incremented atomically each time an invoice of that type is created.
+  // Digits controls zero-padding width (e.g. 6 -> "000082", 4 -> "0072").
+  nextProformaNumber  Int @default(82)
+  proformaNumberDigits Int @default(6)
+  nextTaxNumber       Int @default(72)
+  taxNumberDigits     Int @default(4)
+
+  updatedAt         DateTime @updatedAt
+}
+
+model Attendance {
+  id        String           @id @default(cuid())
+  date      DateTime         @default(now())
+  status    AttendanceStatus @default(PRESENT)
+  checkIn   DateTime?
+  checkOut  DateTime?
+  note      String?
+
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  isGroup   Boolean  @default(false)
+  name      String?
+  createdAt DateTime @default(now())
+
+  participants ConversationParticipant[]
+  messages     DirectMessage[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+}
+
+model DirectMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content        String
+  tag            MessageTag   @default(NONE)
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+
+  fileId String?
+  file   FileAsset? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+
+  replyToId String?
+  replyTo   DirectMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   DirectMessage[] @relation("MessageReplies")
+
+  reactions MessageReaction[]
+}
+
+model MessageReaction {
+  id        String        @id @default(cuid())
+  emoji     String
+  createdAt DateTime      @default(now())
+
+  messageId String
+  message   DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+}
+
+enum MessageTag {
+  NONE
+  ANNOUNCEMENT
+  DISCUSSION
+  IDEA
+  IMPORTANT
+  SUGGESTION
+}
+
+model FileAsset {
+  id           String   @id @default(cuid())
+  name         String
+  url          String
+  sizeBytes    Int?
+  mimeType     String?
+  createdAt    DateTime @default(now())
+
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  messages     DirectMessage[]
+  taskComments TaskComment[]
+}
