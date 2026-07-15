@@ -48,6 +48,15 @@ export async function deleteClient(id: string) {
   redirect("/clients");
 }
 
+export async function updateClientAdBudget(clientId: string, formData: FormData) {
+  const session = await getServerSession(authOptions);
+  if (session?.user.role !== "ADMIN") return;
+
+  const adBudget = Math.max(0, Number(formData.get("adBudget") || 0));
+  await prisma.client.update({ where: { id: clientId }, data: { adBudget } });
+  revalidatePath(`/clients/${clientId}`);
+}
+
 export async function addClientAdAccount(clientId: string, formData: FormData) {
   const session = await getServerSession(authOptions);
   if (session?.user.role === "MEMBER") return;

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { fetchGoogleAdsCampaigns, isGoogleAdsConnected, type GoogleAdsCampaign } from "@/lib/googleAds";
-import { fetchMetaCampaigns, fetchMetaInsights, fetchMetaAdPreview, type MetaCampaign, type MetaInsightRow, type MetaBreakdownId, type AdPreviewFormat } from "@/lib/meta";
+import { fetchMetaCampaigns, fetchMetaInsights, fetchMetaAdPreview, type MetaCampaign, type MetaInsightRow, type MetaBreakdownId, type AdPreviewFormat, type DateRange } from "@/lib/meta";
 
 export async function getClientGoogleAdsCampaigns(
   customerId: string,
@@ -108,19 +108,42 @@ export async function getMetaAdPreview(
 export async function getClientMetaInsights(
   adAccountId: string,
   breakdowns: MetaBreakdownId[],
-  clientId?: string
+  clientId?: string,
+  dateRange?: DateRange
 ): Promise<{ rows: MetaInsightRow[]; error: string | null }> {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role === "MEMBER") return { rows: [], error: "Not authorized" };
 
   try {
-    const rows = await fetchMetaInsights(adAccountId, breakdowns, clientId);
+    const rows = await fetchMetaInsights(adAccountId, breakdowns, clientId, dateRange);
     return { rows, error: null };
   } catch (err: any) {
     console.error("Meta insights fetch failed:", err);
     const message: string = err.message || "unknown_error";
     if (message.includes("not connected")) return { rows: [], error: "not_connected" };
     return { rows: [], error: message };
+  }
+}
+
+// Lightweight campaign-level spend total for a single account over a given
+// range — used to refresh the "Ad spend" summary card when the date range
+// changes, without pulling the full breakdown/metric matrix the table needs.
+export async function getClientMetaSpendTotal(
+  adAccountId: string,
+  clientId: string | undefined,
+  dateRange: DateRange
+): Promise<{ spend: number; error: string | null }> {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role === "MEMBER") return { spend: 0, error: "Not authorized" };
+
+  try {
+    const rows = await fetchMetaInsights(adAccountId, ["campaign"], clientId, dateRange);
+    return { spend: rows.reduce((s, r) => s + r.spend, 0), error: null };
+  } catch (err: any) {
+    console.error("Meta spend total fetch failed:", err);
+    const message: string = err.message || "unknown_error";
+    if (message.includes("not connected")) return { spend: 0, error: "not_connected" };
+    return { spend: 0, error: message };
   }
 }
 

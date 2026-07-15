@@ -194,6 +194,7 @@ model Client {
   notes     String?
   gstNumber       String?
   billingAddress  String?
+  adBudget        Float     @default(0)
   lastBudgetAlertAt DateTime?
   createdAt DateTime  @default(now())
 

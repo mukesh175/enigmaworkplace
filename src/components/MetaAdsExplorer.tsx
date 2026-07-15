@@ -1,17 +1,21 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   META_METRICS,
   META_BREAKDOWNS,
   DEFAULT_META_METRICS,
   DEFAULT_META_BREAKDOWNS,
+  resolveDateRange,
   type MetaInsightRow,
   type MetaMetricId,
   type MetaBreakdownId,
+  type DateRangePresetId,
+  type DateRange,
 } from "@/lib/meta";
 import { getClientMetaInsights } from "@/lib/actions/integrations";
 import AdPreviewModal from "@/components/AdPreviewModal";
+import DateRangePicker from "@/components/DateRangePicker";
 
 const DIMENSION_COLUMNS: { id: MetaBreakdownId; key: keyof MetaInsightRow; label: string }[] = [
   { id: "campaign", key: "campaignName", label: "Campaign name" },
@@ -39,11 +43,17 @@ export default function MetaAdsExplorer({
   clientId,
   initialRows,
   initialError,
+  datePreset,
+  customRange,
+  onDateRangeChange,
 }: {
   accountId: string;
   clientId?: string;
   initialRows: MetaInsightRow[];
   initialError: string | null;
+  datePreset: DateRangePresetId;
+  customRange: DateRange;
+  onDateRangeChange: (preset: DateRangePresetId, customRange: DateRange) => void;
 }) {
   const [breakdowns, setBreakdowns] = useState<MetaBreakdownId[]>(DEFAULT_META_BREAKDOWNS);
   const [metrics, setMetrics] = useState<MetaMetricId[]>(DEFAULT_META_METRICS);
@@ -57,17 +67,36 @@ export default function MetaAdsExplorer({
   const [previewAd, setPreviewAd] = useState<{ id: string; name?: string } | null>(null);
 
   const activeDimensionCols = DIMENSION_COLUMNS.filter((c) => breakdowns.includes(c.id));
+  const resolvedRange = resolveDateRange(datePreset, customRange);
 
   function refetch(nextBreakdowns: MetaBreakdownId[]) {
     setBreakdowns(nextBreakdowns);
     startTransition(async () => {
-      const result = await getClientMetaInsights(accountId, nextBreakdowns, clientId);
+      const result = await getClientMetaInsights(accountId, nextBreakdowns, clientId, resolvedRange);
       setRows(result.rows);
       setError(result.error);
       setSort(null);
       setFilters({});
     });
   }
+
+  const isFirstRender = useRef(true);
+
+  // Refetch the table whenever the shared date range changes (breakdowns
+  // stay as-is; only the window of data moves). Skipped on first mount since
+  // initialRows was already fetched server-side for the default range.
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    startTransition(async () => {
+      const result = await getClientMetaInsights(accountId, breakdowns, clientId, resolvedRange);
+      setRows(result.rows);
+      setError(result.error);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedRange.since, resolvedRange.until]);
 
   function toggleBreakdown(id: MetaBreakdownId) {
     const isTime = id === "day" || id === "month";
@@ -158,11 +187,14 @@ export default function MetaAdsExplorer({
 
   return (
     <div className="card p-5 relative">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-display text-base">Meta Ads — last 30 days</h2>
-        <button type="button" onClick={() => setPanelOpen((o) => !o)} className="btn-secondary text-xs">
-          {panelOpen ? "Close" : "Customise"}
-        </button>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <h2 className="font-display text-base">Meta Ads</h2>
+        <div className="flex items-center gap-3 flex-wrap">
+          <DateRangePicker preset={datePreset} customRange={customRange} onChange={onDateRangeChange} />
+          <button type="button" onClick={() => setPanelOpen((o) => !o)} className="btn-secondary text-xs">
+            {panelOpen ? "Close" : "Customise"}
+          </button>
+        </div>
       </div>
 
       {panelOpen && (
@@ -202,7 +234,7 @@ export default function MetaAdsExplorer({
       ) : isPending ? (
         <p className="text-base-500 text-sm">Loading…</p>
       ) : rows.length === 0 ? (
-        <p className="text-base-500 text-sm">No campaign activity in the last 30 days.</p>
+        <p className="text-base-500 text-sm">No campaign activity in the selected date range.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

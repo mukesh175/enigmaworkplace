@@ -116,6 +116,45 @@ export const META_BREAKDOWNS: { id: MetaBreakdownId; label: string; group: "leve
 
 export const DEFAULT_META_BREAKDOWNS: MetaBreakdownId[] = ["campaign", "adset", "ad"];
 
+export type DateRange = { since: string; until: string }; // YYYY-MM-DD, inclusive
+
+export const DATE_RANGE_PRESETS = [
+  { id: "today", label: "Today" },
+  { id: "yesterday", label: "Yesterday" },
+  { id: "last_7d", label: "Last 7 days" },
+  { id: "last_14d", label: "Last 14 days" },
+  { id: "last_30d", label: "Last 30 days" },
+  { id: "last_90d", label: "Last 90 days" },
+  { id: "custom", label: "Custom range" },
+] as const;
+
+export type DateRangePresetId = (typeof DATE_RANGE_PRESETS)[number]["id"];
+
+function toIsoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// Resolves a preset id (or an already-picked custom range) to concrete
+// since/until dates. "Last N days" is inclusive of today, matching what
+// Meta's own date-range picker means by e.g. "Last 7 days".
+export function resolveDateRange(preset: DateRangePresetId, custom?: DateRange): DateRange {
+  const today = new Date();
+  if (preset === "custom" && custom) return custom;
+  if (preset === "today") return { since: toIsoDate(today), until: toIsoDate(today) };
+  if (preset === "yesterday") {
+    const y = new Date(today);
+    y.setDate(y.getDate() - 1);
+    return { since: toIsoDate(y), until: toIsoDate(y) };
+  }
+  const daysMap: Record<string, number> = { last_7d: 7, last_14d: 14, last_30d: 30, last_90d: 90 };
+  const days = daysMap[preset] ?? 30;
+  const since = new Date(today);
+  since.setDate(since.getDate() - (days - 1));
+  return { since: toIsoDate(since), until: toIsoDate(today) };
+}
+
+export const DEFAULT_DATE_RANGE_PRESET: DateRangePresetId = "last_30d";
+
 const GRAPH_BREAKDOWN_PARAM: Partial<Record<MetaBreakdownId, string>> = {
   age: "age",
   gender: "gender",
@@ -160,12 +199,14 @@ export type MetaInsightRow = {
 export async function fetchMetaInsights(
   adAccountId: string,
   breakdowns: MetaBreakdownId[],
-  clientId?: string
+  clientId?: string,
+  dateRange?: DateRange
 ): Promise<MetaInsightRow[]> {
   const accessToken = await resolveMetaAccessToken(clientId);
   if (!accessToken) throw new Error("Meta Ads is not connected for this client or your agency yet.");
 
   const cleanId = adAccountId.replace(/\D/g, "");
+  const range = dateRange ?? resolveDateRange(DEFAULT_DATE_RANGE_PRESET);
 
   const level = breakdowns.includes("ad") ? "ad" : breakdowns.includes("adset") ? "adset" : "campaign";
 
@@ -194,7 +235,7 @@ export async function fetchMetaInsights(
   const params = new URLSearchParams({
     fields,
     level,
-    date_preset: "last_30d",
+    time_range: JSON.stringify({ since: range.since, until: range.until }),
     access_token: accessToken,
   });
   if (dimensionBreakdowns.length) params.set("breakdowns", dimensionBreakdowns.join(","));
@@ -298,8 +339,8 @@ export type MetaCampaign = {
   cpc: number;
 };
 
-export async function fetchMetaCampaigns(adAccountId: string, clientId?: string): Promise<MetaCampaign[]> {
-  const rows = await fetchMetaInsights(adAccountId, ["campaign"], clientId);
+export async function fetchMetaCampaigns(adAccountId: string, clientId?: string, dateRange?: DateRange): Promise<MetaCampaign[]> {
+  const rows = await fetchMetaInsights(adAccountId, ["campaign"], clientId, dateRange);
   return rows.map((r) => ({
     id: r.id,
     name: r.campaignName ?? "—",

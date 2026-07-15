@@ -29,6 +29,7 @@ export default async function ClientDetailPage({
   const session = await getServerSession(authOptions);
   if (session?.user.role === "MEMBER") redirect("/my-tasks");
   const canManage = session?.user.role === "ADMIN" || session?.user.role === "MANAGER";
+  const isAdmin = session?.user.role === "ADMIN";
 
   const client = await prisma.client.findUnique({
     where: { id: params.id },
@@ -42,7 +43,7 @@ export default async function ClientDetailPage({
 
   const tasks = client.projects.flatMap((p) => p.tasks.map((t) => ({ ...t, projectName: p.name })));
 
-  const budgetGiven = client.projects.reduce((sum, p) => sum + (p.budget ?? 0), 0);
+  const budgetGiven = client.adBudget ?? 0;
   const revenue = client.invoices
     .filter((inv) => inv.status === "PAID")
     .reduce((sum, inv) => sum + inv.items.reduce((s, it) => s + it.quantity * it.rate, 0), 0);
@@ -131,6 +132,7 @@ export default async function ClientDetailPage({
       {accountResults.length > 0 && (
         <PlatformDashboardTabs
           clientId={client.id}
+          isAdmin={!!isAdmin}
           googleAccounts={googleAccounts}
           metaAccounts={metaAccounts}
           budgetGiven={budgetGiven}
